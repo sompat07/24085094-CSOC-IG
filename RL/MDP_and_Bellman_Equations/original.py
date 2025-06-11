@@ -1,9 +1,7 @@
 import numpy as np
 import gymnasium as gym
 import time
-
-def line():
-  print("==============================================================")
+import sys
 
 def initialize(env):
     states = env.observation_space.n
@@ -86,113 +84,70 @@ def policy_iteration(env, theta, gamma):
 
     return V, policy
 
-def value_iteration(env,theta,gamma):
-  states = env.observation_space.n
-  actions = env.action_space.n
-  
-  V = np.zeros(states) #state-value function
+def train(env,theta=1e-10, gamma=0.99):
+        states = env.observation_space.n
+        actions = env.action_space.n
+        
+        V = np.zeros(states)
+        policy = np.zeros(states, dtype=int)
+        start_time = time.perf_counter()
+        while True:
+            delta = 0
+            for s in range(states):
+                v = V[s]
+                action_values = np.zeros(actions)
+                for a in range(actions):
+                    action_values[a] = sum(prob * (reward + gamma * V[next_state]) 
+                                            for prob, next_state, reward, _ in env.P[s][a])
+                V[s] = np.max(action_values)
+                delta = max(delta, abs(v - V[s]))
+            if delta < theta:
+                break
+        
+        for s in range(states):
+            action_values = np.zeros(actions)
+            for a in range(actions):
+                action_values[a] = sum(prob * (reward + gamma * V[next_state]) 
+                                        for prob, next_state, reward, _ in env.P[s][a])
+            policy[s] = np.argmax(action_values)
+        end_time = time.perf_counter()
+        time_taken = end_time - start_time
+        return policy,time_taken
 
-  while True:
-    delta = 0
-    for s in range(states):
-      v = V[s]
-      q = np.zeros(actions)
-      for a in range(actions):
-        q[a] = sum(prob*(reward + gamma*V[s_]) for prob,s_,reward,done in env.P[s][a])
+def run(env,optimal_policy,episodes=100):
+    state = env.reset()[0]
+    tpe = np.zeros(episodes)
 
-      V[s] = np.max(q)
-      delta = np.maximum(delta,np.abs(v-V[s]))
-    if delta < theta:
-      break
-  return V
-  
-def policy_extraction(env,V,gamma):
-  states = env.observation_space.n
-  actions = env.action_space.n
-  
-  policy = np.zeros(states)
-  
-  for s in range(states):
-    q = np.zeros(actions)
-    for a in range(actions):
-      q[a] = sum(prob*(reward + gamma*V[s_]) for prob,s_,reward,done in env.P[s][a])
-    
-    policy[s] = np.argmax(q)
-  
-  return policy
-
-def print_policy(env,policy):
-    states = env.observation_space.n
-    chart = []
-    for i in range(env.nrow):
-        row = []
-        for j in range(env.ncol):
-            state = i * env.ncol + j
-            action = policy[state]
-            if action == 0:  # left
-                row.append("←")
-            elif action == 1:  # down
-                row.append("↓")
-            elif action == 2:  # right
-                row.append("→")
-            elif action == 3:  # up
-                row.append("↑")
-            else:
-                row.append("?")
-        chart.append(row)
-    print("Optimal Policy:")
-    for row in chart:
-        print(" ".join(row))
-
-def run(env, optimal_policy):
-   state = env.reset()[0]
-   while True:
-        action = int(optimal_policy[state])
-        state, reward, terminated, truncated, info = env.step(action)
-       
-        if terminated or truncated:
-            break
-   
+    for i in range(episodes):
+        state = env.reset()[0]
+        start_time = time.perf_counter()
+        while True:
+            action = int(optimal_policy[state])
+            state, reward, terminated, truncated, info = env.step(action)
+        
+            if terminated or truncated:
+                break
+        end_time = time.perf_counter()
+        tpe[i] = end_time - start_time
+        
+    return tpe
 
 if __name__ == "__main__":
+    env = gym.make("FrozenLake-v1", desc=None, map_name="4x4", is_slippery=False, render_mode=None)
+    policy, ct = train(env,gamma=0.99, theta=1e-10)
+    tpe = run(env,policy,episodes=10000)
 
-    env = gym.make("FrozenLake-v1", map_name="4x4", is_slippery=True)
-    env.reset()
-    line()
-    #Using Policy Iteration Method
-
-    # start1 = time.perf_counter()
-    # optimal_value_function, optimal_policy = policy_iteration(env, theta=1e-10, gamma=0.9)
-    # end1 = time.perf_counter()
-
-    # convergence_time1 = end1 - start1
-    # print(f"Convergence time by policy iteration method: {(convergence_time1 * 1000):.4f} milliseconds")
-    # line() 
-
-    # run(env, optimal_policy)
-
-    #Using Value Iteration Method
-    ctpi = np.zeros(100)
-    elpi = np.zeros(100)
-    for i in range(100):
-        start2 = time.perf_counter()
-        optimal_value_function = value_iteration(env,theta=1e-10,gamma=0.9)
-        optimal_policy = policy_extraction(env,optimal_value_function,gamma=0.9)
-        end2 = time.perf_counter()
-
-        ctpi[i] = end2 - start2
-
-        start3 = time.perf_counter()
-        run(env,optimal_policy)
-        end3 = time.perf_counter()
-
-        elpi[i] = end3 - start3
-    
-    print(ctpi.mean()*1000,'\n',elpi.mean()*1000)
-
-
+    with open("output.txt","w") as file:
+        sys.stdout = file
         
-    
+        print("=====================")
+        print(policy.reshape(env.desc.shape))
+        print("=====================")
+        print(f"Convergence Time = {ct*1000:.4f} ms")
+        print("=====================")
+        print(f"Mean Time Per Episode = {np.mean(tpe)*1000:.4f} ms")
+        print("=====================")
+        
 
-
-    
+        file.close()
+    sys.stdout = sys.__stdout__
