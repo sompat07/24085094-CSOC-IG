@@ -232,25 +232,28 @@ if __name__ == "__main__":
     env = gym.make('FrozenLake-v1', desc=lake, is_slippery=False,
                    max_episode_steps=500, render_mode='human' if render else
         None)
-    ep = 100000
+    ep = 35000
     p = {
         'desc': lake,
         'length': m,
-        "discount_factor": 0.99,
+        "discount_factor": 1,
         'theta':1e-10,
-        "epsilon": 1,
-        "epsilon_decay_rate": 0.8/ep,
+        "epsilon": 0.2,
+        "epsilon_decay_rate": 0.1/ep,
         'episodes': ep,
         'learning_rate': 0.01
     }
     for algo in [
         # "value_iteration",
-        "monte_carlo",
+        # "monte_carlo",
         "SARSA",
         "q_learning"
     ]:
         print(f'Algorithm: {algo}')
         print('----------------------------')
+        if algo == 'SARSA':
+            p['epsilon'] = 1
+            p['epsilon_decay_rate'] = 0.9/ep
         q, ct = train(env,algo,p)
         policy = np.zeros(env.observation_space.n)
         for s in range(env.observation_space.n):
